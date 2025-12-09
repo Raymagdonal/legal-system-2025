@@ -1,103 +1,150 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import {
+  FileText,
+  Clock,
+  CheckCircle,
+  AlertTriangle
+} from 'lucide-react';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer
+} from 'recharts';
+import { useCases } from './context/CasesContext';
+
+export default function Dashboard() {
+  const { cases } = useCases();
+
+  // Calculate dynamic stats
+  const totalContracts = cases.length;
+  const inProgress = cases.filter(c => c.status === 'In Progress').length;
+  // 'Pending' technically isn't 'Completed', but let's see what the user wants. 
+  // Usually "Completed" is "Closed".
+  // The user probably wants "Pending" to be shown somewhere too or just tracked.
+  // The original static stats had: Total, In Progress, Completed.
+  // Let's map: 
+  // In Progress -> 'In Progress'
+  // Completed -> 'Closed'
+  // What about 'Pending'? The pie chart shows it.
+  // Let's stick to the 3 cards pattern but make them dynamic.
+  // actually, maybe we should add "Pending" as a card? 
+  // The user asked to "sync".
+
+  const closed = cases.filter(c => c.status === 'Closed').length;
+  const pending = cases.filter(c => c.status === 'Pending').length;
+
+  const dynamicStats = [
+    { label: 'สัญญาทั้งหมด', value: totalContracts, icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { label: 'กำลังดำเนินการ', value: inProgress, icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-50' },
+    { label: 'เสร็จสิ้น', value: closed, icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-50' },
+  ];
+
+  // Dynamic Pie Data
+  const pieData = [
+    { name: 'กำลังดำเนินการ', value: inProgress, color: '#3B82F6' },
+    { name: 'รอการลงนาม', value: pending, color: '#F59E0B' }, // Mapping 'Pending' to 'รอการลงนาม/ดำเนินการ'
+    { name: 'เสร็จสิ้น', value: closed, color: '#10B981' },
+  ].filter(d => d.value > 0); // Hide empty slices
+
+  // Determine expiring contracts dynamically from shared context data
+  const expiringContracts = cases.map(c => {
+    const today = new Date('2025-12-09'); // Using fixed date as per current simulation context
+    const end = new Date(c.endDate);
+    const diffTime = Math.abs(end.getTime() - today.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    let isExpiring = false;
+    if (end > today && diffDays <= 30) {
+      isExpiring = true;
+    }
+
+    return { ...c, daysLeft: diffDays, isExpiring };
+  }).filter(c => c.isExpiring).sort((a, b) => a.daysLeft - b.daysLeft);
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold text-gray-800">ภาพรวมระบบ (Dashboard)</h1>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+      {/* Alert Section for Expiring Contracts */}
+      {expiringContracts.length > 0 ? (
+        <div className="rounded-xl border border-red-100 bg-red-50 p-4">
+          <div className="flex items-center gap-2 text-red-800">
+            <AlertTriangle className="h-5 w-5" />
+            <h3 className="font-bold">แจ้งเตือนสัญญาใกล้หมดอายุ (ภายใน 30 วัน)</h3>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            {expiringContracts.map((contract) => (
+              <div key={contract.id} className="flex items-center justify-between rounded-lg bg-white p-3 shadow-sm">
+                <div>
+                  <p className="font-medium text-gray-800">{contract.title}</p>
+                  <p className="text-xs text-gray-500">หมดอายุ: {contract.endDate}</p>
+                </div>
+                <span className={`rounded-full px-3 py-1 text-xs font-bold ${contract.daysLeft <= 7 ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>
+                  อีก {contract.daysLeft} วัน
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      ) : (
+        <div className="rounded-xl border border-gray-200 bg-white p-4 text-center text-gray-500">
+          ไม่มีสัญญาที่ใกล้หมดอายุในขณะนี้
+        </div>
+      )}
+
+      {/* Stats Cards - Grid adjusted to 3 columns */}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        {dynamicStats.map((stat, index) => (
+          <div key={index} className="flex items-center justify-between rounded-xl bg-white p-6 shadow-sm">
+            <div>
+              <p className="text-sm font-medium text-gray-500">{stat.label}</p>
+              <h3 className="mt-2 text-3xl font-bold text-gray-800">{stat.value}</h3>
+            </div>
+            <div className={`rounded-full p-3 ${stat.bg}`}>
+              <stat.icon className={`h-6 w-6 ${stat.color}`} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Charts Area - Single Column now */}
+      <div className="grid grid-cols-1">
+        {/* Case Status Chart */}
+        <div className="rounded-xl bg-white p-6 shadow-sm">
+          <h3 className="mb-6 text-lg font-bold text-gray-800">สถานะสัญญา</h3>
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {pieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="flex justify-center gap-4">
+            {pieData.map((entry, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <div className="h-3 w-3 rounded-full" style={{ backgroundColor: entry.color }}></div>
+                <span className="text-sm text-gray-600">{entry.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
